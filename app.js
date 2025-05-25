@@ -1,24 +1,36 @@
+require('dotenv').config();
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const { Pool } = require('pg');
-require('dotenv').config();
 
+// Uncomment if Node version < 18
+// const fetch = require('node-fetch');
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+const isProduction = process.env.NODE_ENV === 'production';
+
+const corsOptions = {
+  origin: isProduction
+    ? 'https://front-end-virid-theta.vercel.app'
+    : '*',
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
-const pool = new Pool({
-  user: process.env.PG_USER,
-  host: process.env.PG_HOST,
-  database: process.env.PG_DATABASE,
-  password: process.env.PG_PASSWORD,
-  port: process.env.PG_PORT,
+app.get('/', (req, res) => {
+  res.send('Mood Journal Backend is running!');
 });
 
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: isProduction ? { rejectUnauthorized: false } : false,
+});
 
 pool.connect()
   .then(() => console.log('✅ Connected to PostgreSQL'))
@@ -30,13 +42,13 @@ pool.connect()
 // -------------------- SIGNUP --------------------
 app.post('/api/auth/signup', async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
+  if (!email || !password)
+    return res.status(400).json({ message: 'Email and password required' });
 
   try {
     const existingUser = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (existingUser.rows.length > 0) {
+    if (existingUser.rows.length > 0)
       return res.status(400).json({ message: 'User already exists' });
-    }
 
     await pool.query('INSERT INTO users (email, password) VALUES ($1, $2)', [email, password]);
     res.status(201).json({ message: 'User registered successfully' });
@@ -49,18 +61,17 @@ app.post('/api/auth/signup', async (req, res) => {
 // -------------------- LOGIN --------------------
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
+  if (!email || !password)
+    return res.status(400).json({ message: 'Email and password required' });
 
   try {
     const userRes = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (userRes.rows.length === 0) {
+    if (userRes.rows.length === 0)
       return res.status(400).json({ message: 'User not found. Please sign up first.' });
-    }
 
     const user = userRes.rows[0];
-    if (user.password !== password) {
+    if (user.password !== password)
       return res.status(401).json({ message: 'Incorrect password' });
-    }
 
     res.status(200).json({ message: 'Login successful' });
   } catch (err) {
@@ -73,9 +84,8 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/mood', async (req, res) => {
   const { email, mood, triggers } = req.body;
 
-  if (!email || !mood) {
+  if (!email || !mood)
     return res.status(400).json({ message: 'Email and mood are required' });
-  }
 
   try {
     await pool.query(
@@ -89,26 +99,23 @@ app.post('/api/mood', async (req, res) => {
   }
 });
 
+// -------------------- GET MOOD HISTORY --------------------
 app.get('/api/mood/history', async (req, res) => {
   const { email, days, triggers } = req.query;
 
-  if (!email || !days) {
+  if (!email || !days)
     return res.status(400).json({ message: 'Missing email or days parameter' });
-  }
 
   const daysInt = parseInt(days);
-  if (isNaN(daysInt) || daysInt <= 0 || daysInt > 365) {
+  if (isNaN(daysInt) || daysInt <= 0 || daysInt > 365)
     return res.status(400).json({ message: 'Invalid days parameter. Must be between 1 and 365.' });
-  }
 
-  // Parse triggers query param to array if provided
   let triggersArray = [];
   if (triggers) {
     triggersArray = triggers.split(',').map(t => t.trim()).filter(t => t.length > 0);
   }
 
   try {
-    // Base query & params
     let queryText = `
       SELECT mood, triggers, created_at
       FROM moods
@@ -117,9 +124,7 @@ app.get('/api/mood/history', async (req, res) => {
     `;
     const queryParams = [email];
 
-    // If triggers filter given, filter moods that have at least one of these triggers
     if (triggersArray.length > 0) {
-      // Use Postgres ANY operator to check array overlap
       queryText += ` AND triggers && $2::text[]`;
       queryParams.push(triggersArray);
     }
@@ -130,7 +135,6 @@ app.get('/api/mood/history', async (req, res) => {
 
     const moodHistory = result.rows;
 
-    // Count each trigger for frontend usage if needed
     const triggerCounts = {};
     moodHistory.forEach(entry => {
       (entry.triggers || []).forEach(trigger => {
@@ -145,7 +149,6 @@ app.get('/api/mood/history', async (req, res) => {
   }
 });
 
-
 // -------------------- FETCH SONGS FROM YOUTUBE --------------------
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
@@ -155,11 +158,10 @@ app.get('/api/songs', async (req, res) => {
 
   const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(
     mood + ' music'
-  )}&key=${'AIzaSyCmOvG_j4kKgE42YUGN_3WZdJdJhRbERxc'}&maxResults=5`;
+  )}&key=${YOUTUBE_API_KEY}&maxResults=5`;
 
-  
   try {
-    const response = await fetch(url); // Uses global fetch in Node 18+
+    const response = await fetch(url);
     const data = await response.json();
 
     if (data.error) {
