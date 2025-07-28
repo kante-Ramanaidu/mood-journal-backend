@@ -7,23 +7,38 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ CORS config (set client origin)
+// Enable CORS for frontend
 app.use(cors({
   origin: process.env.CLIENT_ORIGIN || 'http://localhost:3000',
   credentials: true,
 }));
-
 app.use(bodyParser.json());
 
-// ✅ PostgreSQL Pool Setup
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://skillswap_s27w_user:uCrtSBMDmkBZfNG1n96y1eq0prXrZkP7@dpg-d1qk0m7diees73f2eg8g-a.oregon-postgres.render.com/skillswap_s27w',
-  ssl: {
-    rejectUnauthorized: false, // Needed for Render
-  },
-});
+// PostgreSQL Pool Setup
+let pool;
 
-// ✅ Check DB connection
+if (process.env.DATABASE_URL) {
+  // 🔗 Render/PostgreSQL with SSL
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false, // For Render or Heroku SSL
+    },
+  });
+  console.log('🌐 Using remote PostgreSQL (Render)');
+} else {
+  // 🧪 Local PostgreSQL setup
+  pool = new Pool({
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD,
+    port: process.env.DB_PORT,
+  });
+  console.log('💻 Using local PostgreSQL');
+}
+
+// DB Connection Test
 pool.connect()
   .then(() => console.log('✅ Connected to PostgreSQL'))
   .catch(err => {
