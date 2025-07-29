@@ -58,7 +58,7 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    await pool.query('INSERT INTO users (email, password) VALUES ($1, $2)', [email, password]);
+    await pool.query('INSERT INTO user1 (email, password) VALUES ($1, $2)', [email, password]);
     res.status(201).json({ message: 'User registered successfully' });
   } catch (err) {
     console.error('Signup error:', err.message);
@@ -72,7 +72,7 @@ app.post('/api/auth/login', async (req, res) => {
   if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
 
   try {
-    const userRes = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const userRes = await pool.query('SELECT * FROM user1 WHERE email = $1', [email]);
     if (userRes.rows.length === 0) {
       return res.status(400).json({ message: 'User not found. Please sign up first.' });
     }
